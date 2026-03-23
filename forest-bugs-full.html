@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Bug Forest Explorer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --dark:#081820;--shadow:#1a3a2a;--mid:#306850;--light:#86c06c;
+  --hl:#e0f8cf;--white:#f8fcf0;--blue:#3890f8;--red:#e04040;
+  --orange:#f8a030;--yellow:#f8e030;--pink:#f868f8;
+  --ui1:#f06030;--ui2:#c04820;--uib:#401810;--ts:#282828;
+}
+body{background:#000;display:flex;justify-content:center;align-items:center;min-height:100dvh;font-family:'Press Start 2P',monospace;overflow:hidden;image-rendering:pixelated}
+#gc{width:100%;max-width:420px;height:100dvh;max-height:820px;background:var(--hl);display:flex;flex-direction:column;position:relative;overflow:hidden;border:3px solid var(--dark)}
+
+/* HUD */
+#hud{background:linear-gradient(180deg,var(--ui1),var(--ui2));border-bottom:3px solid var(--uib);padding:6px 8px;display:flex;justify-content:space-between;align-items:center;z-index:10;flex-shrink:0;gap:2px}
+.st{font-size:6px;color:var(--white);text-shadow:1px 1px 0 var(--ts);line-height:1.5;white-space:nowrap}
+.st .v{color:var(--yellow)}
+#xp-bar-wrap{width:100%;height:6px;background:rgba(0,0,0,0.3);border-radius:3px;border:1px solid var(--uib);flex-shrink:0}
+#xp-bar{height:100%;background:linear-gradient(90deg,#58c840,#a8f868);border-radius:2px;transition:width 0.3s;width:0%}
+#hud-row2{display:flex;justify-content:space-between;align-items:center;padding:2px 8px 4px;background:var(--ui2);border-bottom:2px solid var(--uib);flex-shrink:0}
+
+/* TIME & WEATHER */
+#time-weather{display:flex;gap:8px;font-size:6px;color:var(--hl);text-shadow:1px 1px 0 var(--ts)}
+
+/* FOREST */
+#forest{flex:1;position:relative;overflow:hidden;cursor:pointer;background:#4a8c50;transition:background 1s}
+#forest-bg{position:absolute;inset:0;overflow:hidden}
+#weather-overlay{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
+#night-overlay{position:absolute;inset:0;pointer-events:none;z-index:7;background:rgba(8,20,50,0);transition:background 2s}
+.tree{position:absolute;font-size:28px;filter:brightness(0.9);text-shadow:2px 2px 0 #1a3a1a;pointer-events:none;z-index:1}
+.grass-tile{position:absolute;width:16px;height:16px}
+.flower{position:absolute;font-size:12px;pointer-events:none;z-index:1}
+.env-detail{position:absolute;pointer-events:none;z-index:2;font-size:14px}
+
+/* BUGS */
+.bug-sprite{position:absolute;z-index:5;cursor:pointer;animation:bugIdle 0.6s steps(2) infinite;filter:drop-shadow(1px 2px 0 rgba(0,0,0,0.3));user-select:none;-webkit-user-select:none;font-size:24px}
+.bug-sprite:active{transform:scale(1.3)}
+.bug-sprite.fleeing{animation:bugFlee 0.3s steps(2) infinite}
+@keyframes bugIdle{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes bugFlee{0%,100%{transform:translateY(0) scaleX(-1)}50%{transform:translateY(-3px) scaleX(-1)}}
+.bug-sprite.caught{animation:bugCatch 0.4s ease-out forwards;pointer-events:none}
+@keyframes bugCatch{0%{transform:scale(1);opacity:1}50%{transform:scale(1.8);opacity:.8}100%{transform:scale(0);opacity:0}}
+
+/* EFFECTS */
+.catch-flash{position:absolute;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle,var(--white) 0%,transparent 70%);pointer-events:none;z-index:20;animation:flash .3s ease-out forwards}
+@keyframes flash{0%{transform:scale(.5);opacity:1}100%{transform:scale(3);opacity:0}}
+.catch-text{position:absolute;z-index:25;font-size:7px;color:var(--white);text-shadow:1px 1px 0 var(--ts);pointer-events:none;animation:floatUp 1.2s ease-out forwards;white-space:nowrap}
+@keyframes floatUp{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-50px);opacity:0}}
+.combo-text{position:absolute;z-index:26;font-size:10px;color:var(--yellow);text-shadow:2px 2px 0 var(--ts);pointer-events:none;animation:comboPop .8s ease-out forwards;white-space:nowrap;left:50%;top:40%}
+@keyframes comboPop{0%{transform:translate(-50%,0) scale(0.5);opacity:0}30%{transform:translate(-50%,0) scale(1.4);opacity:1}100%{transform:translate(-50%,-30px) scale(1);opacity:0}}
+.sparkle{position:absolute;width:4px;height:4px;background:var(--white);border-radius:50%;pointer-events:none;z-index:3;animation:sparkle 1.5s ease-out forwards}
+@keyframes sparkle{0%{transform:scale(0);opacity:1}50%{transform:scale(1);opacity:.8}100%{transform:scale(0);opacity:0}}
+.raindrop{position:absolute;width:2px;height:8px;background:rgba(150,180,255,0.5);pointer-events:none;z-index:6;animation:rain .6s linear forwards}
+@keyframes rain{0%{transform:translateY(-10px);opacity:.7}100%{transform:translateY(var(--fh));opacity:0}}
+.leaf{position:absolute;font-size:10px;pointer-events:none;z-index:4;animation:leafFall 4s linear forwards}
+@keyframes leafFall{0%{transform:translateY(-20px) rotate(0deg);opacity:.8}100%{transform:translateY(var(--fh)) rotate(720deg);opacity:0}}
+
+/* PLAYER */
+#player{position:absolute;z-index:8;font-size:22px;filter:drop-shadow(1px 2px 0 rgba(0,0,0,0.4));pointer-events:none;transition:left .5s ease-in-out,top .5s ease-in-out}
+
+/* EXPLORE & NET BUTTONS */
+#action-bar{position:absolute;bottom:175px;left:0;right:0;display:flex;justify-content:center;gap:8px;z-index:15;padding:0 12px}
+.action-btn{font-family:'Press Start 2P',monospace;font-size:7px;color:var(--white);text-shadow:1px 1px 0 var(--ts);border:3px solid var(--dark);border-radius:8px;padding:8px 14px;cursor:pointer;box-shadow:0 4px 0 var(--dark);transition:transform .05s,box-shadow .05s;white-space:nowrap}
+.action-btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--dark)}
+#explore-btn{background:linear-gradient(180deg,#58a840,#388028)}
+#net-btn{background:linear-gradient(180deg,#4080c0,#305898)}
+#net-btn.cooldown{opacity:0.4;pointer-events:none}
+
+/* AREA BANNER */
+#area-banner{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);z-index:30;background:var(--dark);border:3px solid var(--hl);padding:12px 24px;font-size:8px;color:var(--hl);text-shadow:1px 1px 0 var(--mid);text-align:center;pointer-events:none;opacity:0;transition:opacity .3s;line-height:2.2}
+#area-banner.show{opacity:1}
+#area-banner .area-sub{font-size:5px;color:var(--light);margin-top:2px}
+
+/* BOTTOM PANEL */
+#bottom-panel{background:linear-gradient(180deg,var(--ui1),var(--ui2));border-top:3px solid var(--uib);flex-shrink:0;z-index:10}
+#tabs{display:flex;border-bottom:2px solid var(--uib)}
+.tab{flex:1;padding:5px 2px;font-family:'Press Start 2P',monospace;font-size:5px;color:var(--hl);text-shadow:1px 1px 0 var(--ts);background:transparent;border:none;cursor:pointer;text-align:center;border-right:1px solid var(--uib);opacity:.5}
+.tab:last-child{border-right:none}
+.tab.active{opacity:1;background:rgba(0,0,0,.2);color:var(--yellow)}
+.tab .notif{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red);margin-left:2px;vertical-align:middle}
+#tab-content{height:155px;overflow-y:auto;padding:6px 8px;scrollbar-width:thin;scrollbar-color:var(--uib) transparent}
+
+/* DEX */
+.dex-entry{display:flex;align-items:center;gap:6px;padding:4px 3px;border-bottom:1px solid rgba(0,0,0,.12);font-size:5.5px;color:var(--white);text-shadow:1px 1px 0 var(--ts);cursor:pointer}
+.dex-entry:active{background:rgba(0,0,0,.15)}
+.dex-entry .emoji{font-size:16px;filter:drop-shadow(1px 1px 0 rgba(0,0,0,.4))}
+.dex-entry .info{flex:1;line-height:1.7}
+.dex-entry .name{color:var(--yellow)}
+.dex-entry .stars{color:var(--orange);font-size:5px}
+.rarity-common{color:var(--hl)}.rarity-uncommon{color:#70d8f8}.rarity-rare{color:var(--orange)}.rarity-legendary{color:var(--pink)}.rarity-mythic{color:#f84848}
+.dex-entry.undiscovered{opacity:.3}
+.dex-entry.undiscovered .emoji{filter:brightness(0) drop-shadow(1px 1px 0 rgba(0,0,0,.4))}
+
+/* UPGRADES */
+.upgrade-btn{display:flex;align-items:center;gap:6px;width:100%;padding:5px 6px;margin-bottom:4px;font-family:'Press Start 2P',monospace;font-size:5.5px;color:var(--white);text-shadow:1px 1px 0 var(--ts);background:rgba(0,0,0,.2);border:2px solid rgba(255,255,255,.12);border-radius:4px;cursor:pointer;text-align:left;line-height:1.6}
+.upgrade-btn:active{background:rgba(0,0,0,.4)}
+.upgrade-btn:disabled{opacity:.3;cursor:default}
+.upgrade-btn .cost{color:var(--yellow)}
+.upgrade-btn .max-tag{color:var(--light);font-size:5px}
+.upgrade-section{font-size:6px;color:var(--yellow);text-shadow:1px 1px 0 var(--ts);padding:6px 0 3px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:4px}
+
+/* ACHIEVEMENTS */
+.ach-entry{display:flex;align-items:center;gap:6px;padding:4px;border-bottom:1px solid rgba(0,0,0,.1);font-size:5px;color:var(--white);text-shadow:1px 1px 0 var(--ts)}
+.ach-entry .icon{font-size:14px}
+.ach-entry.locked{opacity:.35}
+.ach-entry .ach-reward{color:var(--yellow)}
+
+/* LOG */
+#log-content{font-size:5.5px;color:var(--hl);text-shadow:1px 1px 0 var(--ts);line-height:1.9}
+.log-rare{color:var(--orange)}.log-legendary{color:var(--pink)}.log-mythic{color:#f84848}.log-event{color:var(--blue)}.log-ach{color:#a8f868}
+
+/* DETAIL MODAL */
+#detail-modal{position:absolute;inset:0;z-index:50;background:rgba(0,0,0,.7);display:none;justify-content:center;align-items:center;padding:20px}
+#detail-modal.show{display:flex}
+#detail-card{background:linear-gradient(180deg,#283848,#182028);border:3px solid var(--hl);border-radius:8px;padding:16px;max-width:300px;width:100%;text-align:center;color:var(--white);text-shadow:1px 1px 0 var(--ts)}
+#detail-card .big-emoji{font-size:48px;display:block;margin:8px 0}
+#detail-card .d-name{font-size:9px;color:var(--yellow);margin:6px 0}
+#detail-card .d-rarity{font-size:6px;margin:4px 0}
+#detail-card .d-lore{font-size:5.5px;line-height:1.8;margin:10px 0;color:var(--hl);text-align:left;padding:8px;background:rgba(0,0,0,.3);border-radius:4px}
+#detail-card .d-stats{font-size:5.5px;line-height:2;text-align:left;margin:8px 0}
+#detail-card .d-close{font-family:'Press Start 2P',monospace;font-size:6px;color:var(--white);background:var(--ui2);border:2px solid var(--uib);border-radius:4px;padding:6px 16px;cursor:pointer;margin-top:8px}
+
+/* LEVEL UP BANNER */
+#lvl-banner{position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);z-index:35;background:linear-gradient(180deg,#f8d830,#e08020);border:3px solid var(--dark);border-radius:8px;padding:10px 20px;font-size:10px;color:var(--dark);text-shadow:1px 1px 0 rgba(255,255,255,.3);text-align:center;pointer-events:none;opacity:0;transition:opacity .3s;line-height:2}
+#lvl-banner.show{opacity:1}
+
+@media(max-height:650px){#tab-content{height:120px}}
+</style>
+</head>
+<body>
+<div id="gc">
+  <div id="hud">
+    <div class="st">Lv<span class="v" id="h-lvl">1</span></div>
+    <div class="st">🐛<span class="v" id="h-bugs">0</span></div>
+    <div class="st" id="h-combo" style="opacity:0">×<span class="v" id="h-combo-val">1</span></div>
+    <div class="st">⭐<span class="v" id="h-coins">0</span></div>
+  </div>
+  <div id="hud-row2">
+    <div id="xp-bar-wrap"><div id="xp-bar"></div></div>
+    <div id="time-weather"><span id="h-time">☀️ DAY</span><span id="h-weather">🌤️</span><span id="h-area">Mossy Path</span></div>
+  </div>
+
+  <div id="forest">
+    <div id="forest-bg"></div>
+    <div id="weather-overlay"></div>
+    <div id="night-overlay"></div>
+    <div id="player">🧢</div>
+    <div id="area-banner">Entering<br><span id="banner-text"></span><div class="area-sub" id="banner-sub"></div></div>
+    <div id="lvl-banner">LEVEL UP!<br><span id="lvl-text"></span></div>
+  </div>
+
+  <div id="action-bar">
+    <button class="action-btn" id="explore-btn">🌿 EXPLORE</button>
+    <button class="action-btn" id="net-btn">🥅 NET</button>
+  </div>
+
+  <div id="bottom-panel">
+    <div id="tabs">
+      <button class="tab active" data-tab="dex">DEX</button>
+      <button class="tab" data-tab="upgrades">SHOP</button>
+      <button class="tab" data-tab="achieve">GOALS</button>
+      <button class="tab" data-tab="log">LOG</button>
+    </div>
+    <div id="tab-content">
+      <div id="dex-panel"></div>
+      <div id="upgrades-panel" style="display:none"></div>
+      <div id="achieve-panel" style="display:none"></div>
+      <div id="log-panel" style="display:none"><div id="log-content"></div></div>
+    </div>
+  </div>
+
+  <div id="detail-modal"><div id="detail-card"></div></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  BUG FOREST EXPLORER — Full Game
+// ═══════════════════════════════════════════════════
+
+// ── AUDIO ENGINE (tiny Web Audio bleeps) ──
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx;
+function ensureAudio(){if(!actx)actx=new AudioCtx()}
+function beep(freq,dur,vol=0.08,type='square'){
+  ensureAudio();if(!actx)return;
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type=type;o.frequency.value=freq;g.gain.value=vol;
+  o.connect(g);g.connect(actx.destination);
+  o.start();g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+dur);
+  o.stop(actx.currentTime+dur);
+}
+function sfxCatch(){beep(880,.08);setTimeout(()=>beep(1320,.1),80)}
+function sfxRare(){beep(660,.1);setTimeout(()=>beep(990,.1),100);setTimeout(()=>beep(1320,.15),200)}
+function sfxLegendary(){beep(440,.12);setTimeout(()=>beep(660,.12),120);setTimeout(()=>beep(880,.12),240);setTimeout(()=>beep(1320,.2),360)}
+function sfxLevelUp(){beep(523,.1);setTimeout(()=>beep(659,.1),100);setTimeout(()=>beep(784,.1),200);setTimeout(()=>beep(1047,.2),300)}
+function sfxUpgrade(){beep(600,.06);setTimeout(()=>beep(900,.1),60)}
+function sfxCombo(){beep(1200,.05);setTimeout(()=>beep(1600,.08),50)}
+
+// ── BUG DATABASE (30 bugs) ──
+const BUGS = [
+  // Mossy Path (area 0)
+  {id:0, name:"Ladybug",emoji:"🐞",rarity:"common",coins:1,xp:2,areas:[0,1],behavior:"calm",
+   lore:"A friendly little beetle with spotted wing covers. Often the first bug young explorers catch."},
+  {id:1, name:"Ant",emoji:"🐜",rarity:"common",coins:1,xp:2,areas:[0,1,2],behavior:"fast",
+   lore:"Tireless workers that travel in long lines. One ant can carry 50 times its body weight."},
+  {id:2, name:"Caterpillar",emoji:"🐛",rarity:"common",coins:1,xp:2,areas:[0],behavior:"slow",
+   lore:"A fuzzy little crawler munching on leaves. One day it will become something beautiful."},
+  {id:3, name:"Cricket",emoji:"🦗",rarity:"common",coins:2,xp:3,areas:[0,1],behavior:"jumpy",
+   lore:"Its chirping song fills the evening air. Males rub their wings to attract mates."},
+  {id:4, name:"Pill Bug",emoji:"🔘",rarity:"common",coins:2,xp:3,areas:[0,2],behavior:"calm",
+   lore:"Not actually an insect — it's a crustacean! Rolls into a ball when frightened."},
+  // Flower Meadow (area 1)
+  {id:5, name:"Honeybee",emoji:"🐝",rarity:"uncommon",coins:3,xp:5,areas:[0,1],behavior:"busy",
+   lore:"A vital pollinator that dances to communicate. Its honey can last thousands of years."},
+  {id:6, name:"Monarch",emoji:"🦋",rarity:"uncommon",coins:4,xp:6,areas:[1,2],behavior:"flutter",
+   lore:"Migrates thousands of miles each year. Its orange wings warn predators of its bitter taste."},
+  {id:7, name:"Bumblebee",emoji:"🐝",rarity:"uncommon",coins:3,xp:5,areas:[1],behavior:"busy",
+   lore:"Shouldn't be able to fly according to simple physics — but nobody told the bumblebee."},
+  {id:8, name:"Grasshopper",emoji:"🦗",rarity:"uncommon",coins:4,xp:5,areas:[1,3],behavior:"jumpy",
+   lore:"Can leap 20 times its body length. Ancient cultures saw them as symbols of freedom."},
+  {id:9, name:"Garden Spider",emoji:"🕷️",rarity:"uncommon",coins:5,xp:7,areas:[1,2],behavior:"ambush",
+   lore:"Weaves intricate orb webs decorated with zigzag patterns to catch the morning dew."},
+  // Old Pond (area 2)
+  {id:10,name:"Snail",emoji:"🐌",rarity:"common",coins:2,xp:3,areas:[2,3],behavior:"slow",
+   lore:"Carries its home on its back. Some snails have been known to sleep for three years."},
+  {id:11,name:"Dragonfly",emoji:"🪰",rarity:"uncommon",coins:5,xp:7,areas:[2],behavior:"fast",
+   lore:"An aerial acrobat that can fly in six directions. Its ancestors had two-foot wingspans."},
+  {id:12,name:"Water Strider",emoji:"〰️",rarity:"uncommon",coins:4,xp:6,areas:[2],behavior:"skitter",
+   lore:"Walks on water using surface tension. Its legs are covered in microscopic water-repelling hairs."},
+  {id:13,name:"Damselfly",emoji:"🩵",rarity:"rare",coins:8,xp:12,areas:[2,3],behavior:"flutter",
+   lore:"More delicate than its dragonfly cousin. Folds its wings over its body when resting."},
+  {id:14,name:"Diving Beetle",emoji:"🪲",rarity:"rare",coins:10,xp:14,areas:[2],behavior:"fast",
+   lore:"Carries a bubble of air under its wings to breathe underwater. A fearsome pond predator."},
+  // Deep Woods (area 3)
+  {id:15,name:"Stag Beetle",emoji:"🪲",rarity:"uncommon",coins:6,xp:8,areas:[3,4],behavior:"calm",
+   lore:"Males sport enormous mandibles used in wrestling matches over territory and mates."},
+  {id:16,name:"Firefly",emoji:"✨",rarity:"rare",coins:10,xp:14,areas:[3],behavior:"glow",timeReq:"night",
+   lore:"Creates light through bioluminescence. Each species has a unique flash pattern to find love."},
+  {id:17,name:"Luna Moth",emoji:"🦋",rarity:"rare",coins:12,xp:16,areas:[3,4],behavior:"flutter",timeReq:"night",
+   lore:"Lives only about a week as an adult — it doesn't even have a mouth. Purely beautiful."},
+  {id:18,name:"Praying Mantis",emoji:"🦂",rarity:"rare",coins:12,xp:16,areas:[3,4],behavior:"ambush",
+   lore:"A patient hunter that strikes in milliseconds. The only insect that can turn its head 180°."},
+  {id:19,name:"Jewel Beetle",emoji:"💎",rarity:"rare",coins:15,xp:18,areas:[3],behavior:"calm",
+   lore:"Its iridescent shell has been used in jewelry for centuries. Attracted to freshly burned forests."},
+  // Mushroom Grotto (area 4)
+  {id:20,name:"Glowworm",emoji:"💡",rarity:"rare",coins:12,xp:16,areas:[4],behavior:"glow",timeReq:"night",
+   lore:"Not a worm at all but a beetle larva. Creates a blue-green glow to lure prey into sticky threads."},
+  {id:21,name:"Atlas Moth",emoji:"🦋",rarity:"rare",coins:15,xp:18,areas:[4,5],behavior:"flutter",
+   lore:"The largest moth in the world. Its wing tips mimic snake heads to frighten predators."},
+  {id:22,name:"Hercules Beetle",emoji:"🪲",rarity:"legendary",coins:25,xp:30,areas:[4],behavior:"slow",
+   lore:"Can lift 850 times its own weight. The rhinoceros horn is used in epic battles with rivals."},
+  {id:23,name:"Orchid Mantis",emoji:"🌸",rarity:"legendary",coins:30,xp:35,areas:[4],behavior:"ambush",
+   lore:"Disguised as a pink flower to ambush pollinators. So convincing that butterflies land on it willingly."},
+  // Ancient Canopy (area 5)
+  {id:24,name:"Goliath Beetle",emoji:"🪲",rarity:"legendary",coins:35,xp:40,areas:[5],behavior:"slow",
+   lore:"One of the heaviest insects alive. In the larval stage it can weigh over 100 grams."},
+  {id:25,name:"Golden Scarab",emoji:"⭐",rarity:"legendary",coins:40,xp:50,areas:[5],behavior:"fast",
+   lore:"Its metallic golden shell reflects light like a mirror. Worshipped by ancient civilizations."},
+  {id:26,name:"Ghost Moth",emoji:"👻",rarity:"legendary",coins:50,xp:60,areas:[5],behavior:"flutter",timeReq:"night",
+   lore:"Appears only on moonless nights. Males hover silently in one spot, glowing an eerie white."},
+  {id:27,name:"Rainbow Stag",emoji:"🌈",rarity:"mythic",coins:80,xp:100,areas:[5],behavior:"calm",
+   lore:"A beetle of impossible beauty — its shell refracts light into all colors. Seen once a generation."},
+  {id:28,name:"Spirit Butterfly",emoji:"🤍",rarity:"mythic",coins:100,xp:120,areas:[5],behavior:"flutter",timeReq:"night",
+   lore:"Said to carry the dreams of the forest. Its wings shimmer with an otherworldly translucence."},
+  {id:29,name:"Elder Weevil",emoji:"👑",rarity:"mythic",coins:150,xp:200,areas:[4,5],behavior:"slow",
+   lore:"The oldest living insect in the forest. Its golden crown-like horn is a mark of its ancient lineage."},
+];
+
+const AREAS = [
+  {id:0,name:"Mossy Path",sub:"Where all journeys begin",color:"#4a8c50",dark:"#2a5830",trees:"🌳",deco:["🪨","🍂","🪵"],unlock:0},
+  {id:1,name:"Flower Meadow",sub:"Buzzing with life",color:"#6aac4a",dark:"#3a7828",trees:"🌻",deco:["🌷","🌼","🌺"],unlock:0},
+  {id:2,name:"Old Pond",sub:"Still waters run deep",color:"#3a7858",dark:"#1a4838",trees:"🌿",deco:["💧","🪷","🐚"],unlock:10},
+  {id:3,name:"Deep Woods",sub:"Few venture this far",color:"#2a5838",dark:"#0a3018",trees:"🌲",deco:["🍄","🕸️","🪨"],unlock:35},
+  {id:4,name:"Mushroom Grotto",sub:"A bioluminescent wonder",color:"#2a4858",dark:"#0a2838",trees:"🍄",deco:["💜","🟣","✳️"],unlock:80},
+  {id:5,name:"Ancient Canopy",sub:"The forest's crown",color:"#1a3828",dark:"#0a2018",trees:"🌲",deco:["⛩️","🗿","🎋"],unlock:160},
+];
+
+const UPGRADES = [
+  {id:"net",  name:"Better Net",   desc:"+1 catch radius",          baseCost:10, maxLvl:8, icon:"🥅",  cat:"tools"},
+  {id:"lure", name:"Bug Lure",     desc:"Faster spawns",            baseCost:8,  maxLvl:8, icon:"🍯",  cat:"tools"},
+  {id:"eyes", name:"Sharp Eyes",   desc:"Spot rarer bugs",          baseCost:20, maxLvl:8, icon:"👁️",  cat:"tools"},
+  {id:"speed",name:"Quick Hands",  desc:"Net cooldown -1s",         baseCost:15, maxLvl:5, icon:"⚡",  cat:"tools"},
+  {id:"boots",name:"Hiking Boots", desc:"Unlock new areas",         baseCost:15, maxLvl:5, icon:"🥾",  cat:"explore"},
+  {id:"lamp", name:"Lantern",      desc:"Find night bugs in day",   baseCost:30, maxLvl:3, icon:"🏮",  cat:"explore"},
+  {id:"jar",  name:"Bug Jar",      desc:"+Coin per catch",          baseCost:12, maxLvl:8, icon:"🫙",  cat:"income"},
+  {id:"charm",name:"Lucky Charm",  desc:"+XP per catch",            baseCost:18, maxLvl:8, icon:"🍀",  cat:"income"},
+  {id:"tent", name:"Base Camp",    desc:"Idle coin gen",            baseCost:25, maxLvl:5, icon:"⛺",  cat:"income"},
+  {id:"book", name:"Field Guide",  desc:"New catch bonus ×2",       baseCost:40, maxLvl:3, icon:"📖",  cat:"income"},
+];
+
+const ACHIEVEMENTS = [
+  {id:"first",  name:"First Catch",      desc:"Catch your first bug",             icon:"🌟",reward:5,  check:s=>s.totalBugs>=1},
+  {id:"ten",    name:"Bug Enthusiast",    desc:"Catch 10 bugs",                    icon:"🎯",reward:10, check:s=>s.totalBugs>=10},
+  {id:"fifty",  name:"Bug Collector",     desc:"Catch 50 bugs",                    icon:"🏆",reward:25, check:s=>s.totalBugs>=50},
+  {id:"hundo",  name:"Bug Maniac",        desc:"Catch 200 bugs",                   icon:"💯",reward:60, check:s=>s.totalBugs>=200},
+  {id:"five_sp",name:"Budding Researcher",desc:"Discover 5 species",               icon:"🔬",reward:15, check:s=>Object.keys(s.discovered).length>=5},
+  {id:"ten_sp", name:"Entomologist",      desc:"Discover 10 species",              icon:"🧪",reward:30, check:s=>Object.keys(s.discovered).length>=10},
+  {id:"twen_sp",name:"Bug Professor",     desc:"Discover 20 species",              icon:"🎓",reward:80, check:s=>Object.keys(s.discovered).length>=20},
+  {id:"all_sp", name:"Living Dex",        desc:"Discover all 30 species",          icon:"👑",reward:500,check:s=>Object.keys(s.discovered).length>=30},
+  {id:"rare1",  name:"Rare Find",         desc:"Catch a rare bug",                 icon:"💎",reward:15, check:s=>BUGS.some(b=>b.rarity==='rare'&&s.discovered[b.id])},
+  {id:"leg1",   name:"Legendary Hunter",  desc:"Catch a legendary bug",            icon:"🌠",reward:40, check:s=>BUGS.some(b=>b.rarity==='legendary'&&s.discovered[b.id])},
+  {id:"myth1",  name:"Myth Made Real",    desc:"Catch a mythic bug",               icon:"✨",reward:100,check:s=>BUGS.some(b=>b.rarity==='mythic'&&s.discovered[b.id])},
+  {id:"combo5", name:"Combo Master",      desc:"Reach a 5× combo",                 icon:"🔥",reward:20, check:s=>s.maxCombo>=5},
+  {id:"combo10",name:"Unstoppable",       desc:"Reach a 10× combo",                icon:"💥",reward:50, check:s=>s.maxCombo>=10},
+  {id:"night",  name:"Night Owl",         desc:"Catch a bug at night",             icon:"🦉",reward:10, check:s=>s.nightCatches>=1},
+  {id:"rain",   name:"Rain Catcher",      desc:"Catch a bug in the rain",          icon:"🌧️",reward:10, check:s=>s.rainCatches>=1},
+  {id:"area3",  name:"Deep Explorer",     desc:"Reach the Deep Woods",             icon:"🌲",reward:20, check:s=>s.areasVisited&&s.areasVisited[3]},
+  {id:"area5",  name:"Canopy Climber",    desc:"Reach the Ancient Canopy",         icon:"☁️",reward:60, check:s=>s.areasVisited&&s.areasVisited[5]},
+  {id:"rich",   name:"Bug Mogul",         desc:"Hold 500 coins at once",           icon:"💰",reward:50, check:s=>s.coins>=500},
+];
+
+// ── GAME STATE ──
+let S = {
+  coins:0,totalBugs:0,area:0,level:1,xp:0,
+  discovered:{},upgrades:{},log:[],
+  achievements:{},maxCombo:0,combo:0,comboTimer:0,
+  nightCatches:0,rainCatches:0,areasVisited:{0:true},
+  time:0, // 0-240 (ticks). 0-80 day, 80-120 dusk, 120-200 night, 200-240 dawn
+  weather:'clear', weatherTimer:0,
+  idleCoins:0,
+};
+for(const u of UPGRADES) S.upgrades[u.id]=0;
+
+const forest=document.getElementById('forest');
+const forestBg=document.getElementById('forest-bg');
+const weatherOvl=document.getElementById('weather-overlay');
+const nightOvl=document.getElementById('night-overlay');
+const player=document.getElementById('player');
+let fW,fH;
+function resize(){const r=forest.getBoundingClientRect();fW=r.width;fH=r.height}
+window.addEventListener('resize',resize);
+
+// ── XP / LEVELING ──
+function xpForLevel(lv){return Math.floor(20*Math.pow(1.4,lv-1))}
+function addXP(amount){
+  const bonus=S.upgrades.charm;
+  amount=Math.floor(amount*(1+bonus*0.15));
+  S.xp+=amount;
+  while(S.xp>=xpForLevel(S.level)){
+    S.xp-=xpForLevel(S.level);
+    S.level++;
+    showLevelUp();
+    sfxLevelUp();
+    S.coins+=S.level*3;
+    addLog(`<span class="log-event">🎉 LEVEL UP! Now Lv.${S.level}! +${S.level*3}⭐</span>`);
+  }
+  updateHUD();
+}
+
+function showLevelUp(){
+  const b=document.getElementById('lvl-banner');
+  document.getElementById('lvl-text').textContent=`Lv.${S.level}`;
+  b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'),2000);
+}
+
+// ── TIME SYSTEM ──
+function getTimeOfDay(){
+  if(S.time<80)return'day';if(S.time<120)return'dusk';if(S.time<200)return'night';return'dawn';
+}
+function tickTime(){
+  S.time=(S.time+1)%240;
+  const tod=getTimeOfDay();
+  let alpha=0;
+  if(tod==='dusk') alpha=((S.time-80)/40)*0.45;
+  else if(tod==='night') alpha=0.45;
+  else if(tod==='dawn') alpha=0.45*(1-(S.time-200)/40);
+  nightOvl.style.background=`rgba(8,15,50,${alpha})`;
+
+  const icons={day:'☀️ DAY',dusk:'🌅 DUSK',night:'🌙 NIGHT',dawn:'🌄 DAWN'};
+  document.getElementById('h-time').textContent=icons[tod];
+
+  // adjust forest brightness
+  if(tod==='night'){forest.style.filter='brightness(0.7) saturate(0.8)'}
+  else if(tod==='dusk'||tod==='dawn'){forest.style.filter='brightness(0.85) saturate(0.9)'}
+  else{forest.style.filter=''}
+}
+
+// ── WEATHER SYSTEM ──
+function tickWeather(){
+  S.weatherTimer--;
+  if(S.weatherTimer<=0){
+    const roll=Math.random();
+    if(roll<0.5){S.weather='clear';S.weatherTimer=60+Math.random()*80}
+    else if(roll<0.75){S.weather='rain';S.weatherTimer=30+Math.random()*40}
+    else if(roll<0.9){S.weather='wind';S.weatherTimer=20+Math.random()*30}
+    else{S.weather='fog';S.weatherTimer=15+Math.random()*25}
+  }
+  const icons={clear:'🌤️',rain:'🌧️',wind:'🍃',fog:'🌫️'};
+  document.getElementById('h-weather').textContent=icons[S.weather];
+  renderWeather();
+}
+
+let rainInterval=null;
+let leafInterval=null;
+function renderWeather(){
+  if(S.weather==='rain'&&!rainInterval){
+    rainInterval=setInterval(()=>{
+      for(let i=0;i<3;i++){
+        const d=document.createElement('div');d.className='raindrop';
+        d.style.left=Math.random()*fW+'px';d.style.top='-10px';
+        d.style.setProperty('--fh',fH+'px');
+        weatherOvl.appendChild(d);setTimeout(()=>d.remove(),600);
+      }
+    },50);
+  } else if(S.weather!=='rain'&&rainInterval){clearInterval(rainInterval);rainInterval=null}
+
+  if(S.weather==='wind'&&!leafInterval){
+    leafInterval=setInterval(()=>{
+      const l=document.createElement('div');l.className='leaf';
+      l.textContent=['🍃','🍂','🌿'][Math.floor(Math.random()*3)];
+      l.style.left=Math.random()*fW+'px';l.style.top='-20px';
+      l.style.setProperty('--fh',fH+'px');
+      weatherOvl.appendChild(l);setTimeout(()=>l.remove(),4000);
+    },200);
+  } else if(S.weather!=='wind'&&leafInterval){clearInterval(leafInterval);leafInterval=null}
+}
+
+// ── FOREST GENERATION ──
+function generateForest(){
+  const area=AREAS[S.area];
+  forest.style.background=getTimeOfDay()==='night'?area.dark:area.color;
+  forestBg.innerHTML='';
+  const c1=area.color,c2=shadeColor(area.color,-15);
+  for(let x=0;x<fW;x+=16){for(let y=0;y<fH;y+=16){
+    const d=document.createElement('div');d.className='grass-tile';
+    d.style.left=x+'px';d.style.top=y+'px';
+    d.style.background=((Math.floor(x/16)+Math.floor(y/16))%2===0)?c1:c2;
+    forestBg.appendChild(d);
+  }}
+  for(let i=0;i<14+Math.random()*8;i++){
+    const t=document.createElement('div');t.className='tree';
+    t.textContent=area.trees;
+    t.style.left=Math.random()*(fW-30)+'px';t.style.top=Math.random()*(fH-40)+'px';
+    t.style.fontSize=(22+Math.random()*20)+'px';t.style.opacity=0.5+Math.random()*0.5;
+    forestBg.appendChild(t);
+  }
+  const flowers=['🌸','🌼','🌺','💮','🍄','🌱'];
+  for(let i=0;i<6+Math.random()*6;i++){
+    const f=document.createElement('div');f.className='flower';
+    f.textContent=flowers[Math.floor(Math.random()*flowers.length)];
+    f.style.left=Math.random()*(fW-16)+'px';f.style.top=Math.random()*(fH-16)+'px';
+    forestBg.appendChild(f);
+  }
+  for(let i=0;i<4;i++){
+    const e=document.createElement('div');e.className='env-detail';
+    e.textContent=area.deco[Math.floor(Math.random()*area.deco.length)];
+    e.style.left=Math.random()*(fW-20)+'px';e.style.top=Math.random()*(fH-20)+'px';
+    forestBg.appendChild(e);
+  }
+  player.style.left=(fW/2-12)+'px';player.style.top=(fH/2-12)+'px';
+}
+
+function shadeColor(hex,pct){
+  let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  r=Math.max(0,Math.min(255,r+Math.floor(r*pct/100)));
+  g=Math.max(0,Math.min(255,g+Math.floor(g*pct/100)));
+  b=Math.max(0,Math.min(255,b+Math.floor(b*pct/100)));
+  return `rgb(${r},${g},${b})`;
+}
+
+// ── COMBO SYSTEM ──
+function addCombo(){
+  S.combo++;if(S.combo>S.maxCombo)S.maxCombo=S.combo;
+  clearTimeout(S.comboTimer);
+  S.comboTimer=setTimeout(()=>{S.combo=0;updateHUD()},4000);
+  if(S.combo>=3){
+    sfxCombo();
+    const ct=document.createElement('div');ct.className='combo-text';
+    ct.textContent=`${S.combo}× COMBO!`;
+    forest.appendChild(ct);setTimeout(()=>ct.remove(),800);
+  }
+  updateHUD();
+}
+
+function getComboMultiplier(){return 1+Math.floor(S.combo/3)*0.25}
+
+// ── BUG SPAWNING ──
+function getSpawnRate(){return Math.max(800,3000-S.upgrades.lure*260)}
+function getRarityWeights(){
+  const e=S.upgrades.eyes;
+  return{common:50-e*4,uncommon:30+e*1,rare:14+e*2,legendary:5+e*1,mythic:1+e*0.3};
+}
+
+function pickBug(){
+  const area=S.area,tod=getTimeOfDay();
+  const lampLvl=S.upgrades.lamp;
+  let available=BUGS.filter(b=>{
+    if(!b.areas.includes(area))return false;
+    if(b.timeReq==='night'&&tod!=='night'&&tod!=='dusk'&&lampLvl<1)return false;
+    return true;
+  });
+  if(!available.length)available=BUGS.filter(b=>b.areas.includes(area));
+  const weights=getRarityWeights();
+  // weather bonuses
+  let wMod={common:0,uncommon:0,rare:0,legendary:0,mythic:0};
+  if(S.weather==='rain'){wMod.uncommon+=5;wMod.rare+=3}
+  if(S.weather==='fog'){wMod.rare+=5;wMod.legendary+=2;wMod.mythic+=0.5}
+  if(getTimeOfDay()==='night'){wMod.rare+=3;wMod.legendary+=1}
+
+  const weighted=available.map(b=>({bug:b,w:Math.max(1,(weights[b.rarity]||1)+(wMod[b.rarity]||0))}));
+  const total=weighted.reduce((s,x)=>s+x.w,0);
+  let r=Math.random()*total;
+  for(const{bug,w}of weighted){r-=w;if(r<=0)return bug}
+  return available[0];
+}
+
+function spawnBug(){
+  const bug=pickBug();if(!bug)return;
+  const el=document.createElement('div');
+  el.className='bug-sprite';el.textContent=bug.emoji;
+  let x=20+Math.random()*(fW-60),y=20+Math.random()*(fH-80);
+  el.style.left=x+'px';el.style.top=y+'px';
+
+  if(bug.rarity==='rare')el.style.filter+=' hue-rotate(20deg) saturate(1.3)';
+  if(bug.rarity==='legendary')el.style.filter+=' hue-rotate(270deg) brightness(1.2)';
+  if(bug.rarity==='mythic')el.style.filter+=' hue-rotate(60deg) brightness(1.4) saturate(1.5)';
+  if(bug.behavior==='glow')el.style.textShadow='0 0 8px rgba(255,255,100,0.8)';
+
+  const catchHandler=(e)=>{e.stopPropagation();e.preventDefault();catchBug(bug,el)};
+  el.addEventListener('click',catchHandler);
+  el.addEventListener('touchstart',catchHandler,{passive:false});
+  forest.appendChild(el);
+
+  // behavior-driven movement
+  const speed=bug.behavior==='fast'?80:bug.behavior==='slow'?25:bug.behavior==='jumpy'?100:50;
+  const wanderDist=bug.behavior==='jumpy'?90:bug.behavior==='flutter'?70:bug.behavior==='ambush'?15:50;
+  const wanderInt=setInterval(()=>{
+    if(!el.parentElement||el.classList.contains('caught'))return;
+    const cx=parseFloat(el.style.left),cy=parseFloat(el.style.top);
+    let nx=cx+(Math.random()-0.5)*wanderDist*2;
+    let ny=cy+(Math.random()-0.5)*wanderDist*2;
+    nx=Math.max(10,Math.min(fW-40,nx));ny=Math.max(10,Math.min(fH-70,ny));
+    const dur=bug.behavior==='jumpy'?0.3:bug.behavior==='fast'?1:2.5;
+    el.style.transition=`left ${dur}s ${bug.behavior==='jumpy'?'ease-out':'linear'}, top ${dur}s ${bug.behavior==='jumpy'?'ease-out':'linear'}`;
+    el.style.left=nx+'px';el.style.top=ny+'px';
+    if(bug.behavior==='flutter'){el.style.transform=`rotate(${(Math.random()-0.5)*20}deg)`}
+  },bug.behavior==='fast'?1200:bug.behavior==='jumpy'?800:2500);
+
+  // flee on nearby miss click
+  const fleeCheck=(e)=>{
+    if(!el.parentElement||el.classList.contains('caught'))return;
+    const rect=el.getBoundingClientRect();
+    const dx=e.clientX-(rect.left+rect.width/2),dy=e.clientY-(rect.top+rect.height/2);
+    if(Math.sqrt(dx*dx+dy*dy)<60&&bug.behavior!=='ambush'&&bug.behavior!=='slow'){
+      el.classList.add('fleeing');
+      const away=dx>0?-80:80;
+      el.style.transition='left 0.3s, top 0.3s';
+      el.style.left=Math.max(5,Math.min(fW-40,parseFloat(el.style.left)+away))+'px';
+      setTimeout(()=>el.classList.remove('fleeing'),500);
+    }
+  };
+  forest.addEventListener('click',fleeCheck);
+
+  const despawnTime=10000+Math.random()*6000-(bug.rarity==='legendary'?3000:bug.rarity==='mythic'?5000:0);
+  setTimeout(()=>{
+    clearInterval(wanderInt);forest.removeEventListener('click',fleeCheck);
+    if(el.parentElement&&!el.classList.contains('caught')){
+      el.style.transition='opacity 0.8s';el.style.opacity='0';
+      setTimeout(()=>el.remove(),800);
+    }
+  },despawnTime);
+
+  // auto-catch from net upgrade
+  if(S.upgrades.net>0){
+    const delay=6000-S.upgrades.net*600;
+    setTimeout(()=>{if(el.parentElement&&!el.classList.contains('caught'))catchBug(bug,el)},delay);
+  }
+}
+
+// ── NET ABILITY ──
+let netCooldown=false;
+document.getElementById('net-btn').addEventListener('click',()=>{
+  if(netCooldown)return;
+  ensureAudio();beep(400,.05);
+  // catch all bugs on screen
+  const all=forest.querySelectorAll('.bug-sprite:not(.caught)');
+  all.forEach(el=>{
+    // find the bug data... stored nowhere on the element, so re-pick randomly (simplified)
+    // Actually let's store bug id on element
+  });
+  // flash the whole screen
+  const fl=document.createElement('div');fl.style.cssText='position:absolute;inset:0;background:rgba(255,255,255,0.4);z-index:25;pointer-events:none';
+  forest.appendChild(fl);setTimeout(()=>fl.remove(),150);
+
+  all.forEach((el,i)=>{
+    setTimeout(()=>{
+      const bugId=parseInt(el.dataset.bugId);
+      const bug=BUGS[bugId]||BUGS[0];
+      catchBug(bug,el);
+    },i*100);
+  });
+
+  netCooldown=true;
+  const btn=document.getElementById('net-btn');btn.classList.add('cooldown');
+  const cd=Math.max(3,8-S.upgrades.speed);
+  let rem=cd;
+  btn.textContent=`🥅 ${rem}s`;
+  const cdInt=setInterval(()=>{rem--;btn.textContent=rem>0?`🥅 ${rem}s`:'🥅 NET';if(rem<=0){clearInterval(cdInt);netCooldown=false;btn.classList.remove('cooldown')}},1000);
+});
+
+// ── CATCH BUG ──
+function catchBug(bug,el){
+  if(el.classList.contains('caught'))return;
+  el.classList.add('caught');ensureAudio();
+
+  if(bug.rarity==='legendary'||bug.rarity==='mythic')sfxLegendary();
+  else if(bug.rarity==='rare')sfxRare();
+  else sfxCatch();
+
+  // flash
+  const fl=document.createElement('div');fl.className='catch-flash';
+  fl.style.left=(parseFloat(el.style.left)-8)+'px';fl.style.top=(parseFloat(el.style.top)-8)+'px';
+  forest.appendChild(fl);setTimeout(()=>fl.remove(),300);
+
+  const isNew=!S.discovered[bug.id];
+  addCombo();
+  const comboMult=getComboMultiplier();
+  const jarBonus=S.upgrades.jar;
+  const bookBonus=isNew?S.upgrades.book*2:0;
+  let coinGain=Math.floor((bug.coins+jarBonus+bookBonus)*comboMult);
+  if(S.weather==='rain')coinGain=Math.floor(coinGain*1.2);
+
+  // float text
+  const txt=document.createElement('div');txt.className='catch-text';
+  let label=`${bug.emoji} ${bug.name}! +${coinGain}⭐`;
+  if(isNew)label+=`<br>★ NEW SPECIES ★`;
+  if(comboMult>1)label+=`<br>×${comboMult.toFixed(2)} combo`;
+  txt.innerHTML=label;
+  txt.style.left=el.style.left;txt.style.top=(parseFloat(el.style.top)-10)+'px';
+  if(bug.rarity==='rare')txt.style.color='#f8a030';
+  if(bug.rarity==='legendary')txt.style.color='#f868f8';
+  if(bug.rarity==='mythic')txt.style.color='#f84848';
+  forest.appendChild(txt);setTimeout(()=>txt.remove(),1200);
+
+  player.style.left=(parseFloat(el.style.left)-5)+'px';
+  player.style.top=(parseFloat(el.style.top)+5)+'px';
+
+  S.coins+=coinGain;S.totalBugs++;
+  S.discovered[bug.id]=(S.discovered[bug.id]||0)+1;
+  if(getTimeOfDay()==='night')S.nightCatches++;
+  if(S.weather==='rain')S.rainCatches++;
+
+  const rc=bug.rarity==='mythic'?'log-mythic':bug.rarity==='legendary'?'log-legendary':bug.rarity==='rare'?'log-rare':'';
+  addLog(`<span class="${rc}">${isNew?'🆕 ':''}Caught ${bug.emoji} ${bug.name}! +${coinGain}⭐${comboMult>1?' (×'+comboMult.toFixed(1)+')':''}</span>`);
+
+  addXP(bug.xp);
+  setTimeout(()=>el.remove(),400);
+  updateHUD();renderDex();checkAchievements();
+}
+
+// ── EXPLORE ──
+document.getElementById('explore-btn').addEventListener('click',()=>{
+  ensureAudio();beep(300,.05);
+  let maxArea=0;
+  const bootsLvl=S.upgrades.boots;
+  for(let i=0;i<AREAS.length;i++){
+    if(S.totalBugs>=AREAS[i].unlock&&i<=bootsLvl)maxArea=i;
+  }
+  S.area=(S.area+1)%(maxArea+1);
+  S.areasVisited[S.area]=true;
+  showAreaBanner();generateForest();updateHUD();checkAchievements();
+});
+
+function showAreaBanner(){
+  const b=document.getElementById('area-banner');
+  document.getElementById('banner-text').textContent=AREAS[S.area].name;
+  document.getElementById('banner-sub').textContent=AREAS[S.area].sub;
+  b.classList.add('show');setTimeout(()=>b.classList.remove('show'),2000);
+}
+
+// ── TABS ──
+const panels=['dex','upgrades','achieve','log'];
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    panels.forEach(p=>document.getElementById(p+'-panel').style.display='none');
+    document.getElementById(tab.dataset.tab+'-panel').style.display='';
+  });
+});
+
+// ── BUG DETAIL MODAL ──
+function showBugDetail(bug){
+  const m=document.getElementById('detail-modal');
+  const c=document.getElementById('detail-card');
+  const count=S.discovered[bug.id]||0;
+  c.innerHTML=`
+    <span class="big-emoji">${bug.emoji}</span>
+    <div class="d-name">${bug.name}</div>
+    <div class="d-rarity"><span class="rarity-${bug.rarity}">${bug.rarity.toUpperCase()}</span></div>
+    <div class="d-stats">
+      Caught: ${count} times<br>
+      Value: ${bug.coins}⭐ / ${bug.xp} XP<br>
+      Areas: ${bug.areas.map(a=>AREAS[a].name).join(', ')}<br>
+      ${bug.timeReq?'Appears at: '+bug.timeReq.toUpperCase()+'<br>':''}
+      Behavior: ${bug.behavior}
+    </div>
+    <div class="d-lore">${bug.lore}</div>
+    <button class="d-close" id="close-detail">CLOSE</button>
+  `;
+  m.classList.add('show');
+  document.getElementById('close-detail').addEventListener('click',()=>m.classList.remove('show'));
+  m.addEventListener('click',(e)=>{if(e.target===m)m.classList.remove('show')});
+}
+
+// ── RENDER FUNCTIONS ──
+function updateHUD(){
+  document.getElementById('h-lvl').textContent=S.level;
+  document.getElementById('h-bugs').textContent=S.totalBugs;
+  document.getElementById('h-coins').textContent=S.coins;
+  document.getElementById('h-area').textContent=AREAS[S.area].name;
+  const pct=Math.min(100,Math.floor(S.xp/xpForLevel(S.level)*100));
+  document.getElementById('xp-bar').style.width=pct+'%';
+  const comboEl=document.getElementById('h-combo');
+  if(S.combo>=2){comboEl.style.opacity='1';document.getElementById('h-combo-val').textContent=S.combo}
+  else{comboEl.style.opacity='0'}
+  renderUpgrades();
+}
+
+function renderDex(){
+  const panel=document.getElementById('dex-panel');
+  panel.innerHTML=BUGS.map(b=>{
+    const found=S.discovered[b.id]||0;
+    const cls=found?'':'undiscovered';
+    const stars=found>=50?'★★★★★':found>=20?'★★★★':found>=10?'★★★':found>=5?'★★':found>=1?'★':'';
+    return `<div class="dex-entry ${cls}" data-bid="${b.id}">
+      <span class="emoji">${b.emoji}</span>
+      <div class="info">
+        <div class="name">${found?b.name:'???'} <span class="stars">${stars}</span></div>
+        <div><span class="rarity-${b.rarity}">${b.rarity.toUpperCase()}</span> ×${found}</div>
+      </div>
+      <div style="font-size:5px">${found?b.coins+'⭐':''}</div>
+    </div>`;
+  }).join('');
+  panel.querySelectorAll('.dex-entry:not(.undiscovered)').forEach(el=>{
+    el.addEventListener('click',()=>showBugDetail(BUGS[parseInt(el.dataset.bid)]));
+  });
+}
+
+function renderUpgrades(){
+  const panel=document.getElementById('upgrades-panel');
+  const cats={tools:'🔧 TOOLS',explore:'🗺️ EXPLORATION',income:'💰 INCOME'};
+  let html='';
+  for(const[catId,catName]of Object.entries(cats)){
+    html+=`<div class="upgrade-section">${catName}</div>`;
+    html+=UPGRADES.filter(u=>u.cat===catId).map(u=>{
+      const lvl=S.upgrades[u.id];const maxed=lvl>=u.maxLvl;
+      const cost=Math.floor(u.baseCost*Math.pow(1.7,lvl));
+      const canBuy=!maxed&&S.coins>=cost;
+      return `<button class="upgrade-btn" ${canBuy?'':'disabled'} data-uid="${u.id}" data-cost="${cost}">
+        <span style="font-size:16px">${u.icon}</span>
+        <div style="flex:1">
+          <div>${u.name} ${maxed?'<span class="max-tag">MAX</span>':'Lv.'+lvl}</div>
+          <div>${u.desc}</div>
+          ${maxed?'':`<div class="cost">${cost} ⭐</div>`}
+        </div>
+      </button>`;
+    }).join('');
+  }
+  panel.innerHTML=html;
+  panel.querySelectorAll('.upgrade-btn:not([disabled])').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const uid=btn.dataset.uid,cost=parseInt(btn.dataset.cost);
+      if(S.coins>=cost){S.coins-=cost;S.upgrades[uid]++;sfxUpgrade();
+        addLog(`<span class="log-event">⬆️ ${uid} upgraded to Lv.${S.upgrades[uid]}!</span>`);
+        updateHUD();renderDex();checkAchievements();
+      }
+    });
+  });
+}
+
+function renderAchievements(){
+  const panel=document.getElementById('achieve-panel');
+  panel.innerHTML=ACHIEVEMENTS.map(a=>{
+    const done=S.achievements[a.id];
+    return `<div class="ach-entry ${done?'':'locked'}">
+      <span class="icon">${done?a.icon:'🔒'}</span>
+      <div style="flex:1;line-height:1.8">
+        <div>${a.name}</div>
+        <div style="opacity:.7">${a.desc}</div>
+      </div>
+      <div class="ach-reward">${done?'✓':a.reward+'⭐'}</div>
+    </div>`;
+  }).join('');
+}
+
+function checkAchievements(){
+  let newAch=false;
+  for(const a of ACHIEVEMENTS){
+    if(!S.achievements[a.id]&&a.check(S)){
+      S.achievements[a.id]=true;
+      S.coins+=a.reward;
+      addLog(`<span class="log-ach">🏅 Achievement: ${a.name}! +${a.reward}⭐</span>`);
+      newAch=true;
+      beep(880,.1);setTimeout(()=>beep(1100,.15),100);
+    }
+  }
+  if(newAch){renderAchievements();updateHUD()}
+}
+
+function addLog(msg){
+  S.log.unshift(msg);if(S.log.length>80)S.log.pop();
+  document.getElementById('log-content').innerHTML=S.log.join('<br>');
+}
+
+// ── IDLE INCOME ──
+function tickIdle(){
+  if(S.upgrades.tent>0){
+    const gain=S.upgrades.tent;
+    S.idleCoins+=gain*0.1; // fractional accumulation
+    if(S.idleCoins>=1){
+      const whole=Math.floor(S.idleCoins);
+      S.coins+=whole;S.idleCoins-=whole;
+      updateHUD();
+    }
+  }
+}
+
+// ── SPARKLES ──
+function spawnSparkle(){
+  const s=document.createElement('div');s.className='sparkle';
+  s.style.left=Math.random()*fW+'px';s.style.top=Math.random()*fH+'px';
+  forest.appendChild(s);setTimeout(()=>s.remove(),1500);
+}
+
+// ── STORE BUG ID ON ELEMENTS ──
+const origSpawn=spawnBug;
+// We need to attach bug id — let's patch it. Actually let's fix the spawn function above.
+// The spawnBug already creates el, let's just add dataset.bugId in the function.
+// We already defined spawnBug so let's monkey-patch: add data attribute.
+// Actually simpler: let me wrap the spawn
+const _origSpawnBug=spawnBug;
+// Hmm, since spawnBug references itself via closures, let's just modify it inline.
+// Actually the cleanest fix: modify the DOM element creation inside spawnBug.
+// Since JS is already evaluated, let's override:
+// We'll do it differently - after el is created in spawnBug, we set dataset.bugId.
+// But spawnBug is already a closed function. Let's create a wrapper:
+
+// The simplest approach: re-patch the function by redefining it won't work since internal refs
+// are closed. Instead, let's use MutationObserver or simply re-add the id in the net handler.
+// Actually the cleanest: the net handler can just auto-catch whatever is there with a generic handler.
+// Let me just make the net catch all with a stored map.
+
+const bugElementMap=new WeakMap();
+const _realSpawnBug=window.spawnBug||spawnBug;
+
+// Store reference: We need to intercept. Since spawnBug is in the same scope, 
+// the simplest thing is: after each bug is added to DOM, we need its data.
+// Let me use a different approach for the net: just re-trigger click on all bugs.
+// That's the simplest fix and works with existing click handlers.
+
+// Override net handler to just click each bug element
+document.getElementById('net-btn').replaceWith(document.getElementById('net-btn').cloneNode(true));
+document.getElementById('net-btn').addEventListener('click',()=>{
+  if(netCooldown)return;
+  ensureAudio();beep(400,.05);
+  const fl=document.createElement('div');fl.style.cssText='position:absolute;inset:0;background:rgba(255,255,255,0.4);z-index:25;pointer-events:none';
+  forest.appendChild(fl);setTimeout(()=>fl.remove(),150);
+  const all=forest.querySelectorAll('.bug-sprite:not(.caught)');
+  all.forEach((el,i)=>{setTimeout(()=>{el.click()},i*80)});
+  netCooldown=true;
+  const btn=document.getElementById('net-btn');btn.classList.add('cooldown');
+  const cd=Math.max(3,8-S.upgrades.speed);let rem=cd;
+  btn.textContent=`🥅 ${rem}s`;
+  const cdI=setInterval(()=>{rem--;btn.textContent=rem>0?`🥅 ${rem}s`:'🥅 NET';if(rem<=0){clearInterval(cdI);netCooldown=false;btn.classList.remove('cooldown')}},1000);
+});
+
+// ── INIT ──
+function init(){
+  resize();generateForest();renderDex();renderUpgrades();renderAchievements();updateHUD();
+  addLog('🌿 Welcome to Bug Forest Explorer!');
+  addLog('Tap bugs to catch them. Explore new areas!');
+  showAreaBanner();
+
+  // Main game tick (every ~500ms)
+  setInterval(()=>{tickTime();tickIdle()},500);
+  // Weather tick (every 2s)
+  setInterval(tickWeather,2000);
+
+  // Spawn loop
+  function scheduleSpawn(){
+    setTimeout(()=>{
+      const active=forest.querySelectorAll('.bug-sprite:not(.caught)').length;
+      const maxBugs=4+Math.floor(S.upgrades.lure/2);
+      if(active<maxBugs)spawnBug();
+      scheduleSpawn();
+    },getSpawnRate());
+  }
+  scheduleSpawn();
+
+  setInterval(spawnSparkle,900);
+  setTimeout(spawnBug,400);setTimeout(spawnBug,900);setTimeout(spawnBug,1500);
+
+  // Touch first interaction to enable audio
+  document.addEventListener('click',ensureAudio,{once:true});
+  document.addEventListener('touchstart',ensureAudio,{once:true});
+}
+
+init();
+</script>
+</body>
+</html>
